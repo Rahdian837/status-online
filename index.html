@@ -411,8 +411,11 @@
          * Berlangganan perubahan data tim secara realtime
          */
         function subscribeToTeamChanges() {
+            // [PERBAIKAN] Membuat nama channel unik untuk user ini
+            const channelName = `wfh_users_channel_${userId}`;
+
             supabase
-                .channel('public:wfh_users')
+                .channel(channelName) // Nama channel unik
                 .on('postgres_changes', { event: '*', schema: 'public', table: TABLE_NAME }, (payload) => {
                     console.log('Perubahan terdeteksi:', payload);
                     const newUser = payload.new;
@@ -432,6 +435,7 @@
                     }
                     if (status === 'CHANNEL_ERROR' || err) {
                         console.error('Koneksi Realtime Gagal:', err);
+                        // [PERBAIKAN] Pesan error lebih jelas
                         showErrorModal(`Koneksi realtime gagal: ${err?.message || 'Error'}. Coba refresh.`);
                     }
                 });
@@ -583,7 +587,7 @@
             detailName.textContent = user.name;
 
             const todayStartWIB = getTodayStartWIB();
-            const isOnlineToday = user.status === 'Online' && user.last_check_in && new Date(user.last_check_in) >= todayStartWIB;
+            const isOnlineToday = user.status === 'Online' && user.last_check_in && new Date(user.last_check_in) >= todayStartWWIB;
 
             // Setup Badge Status
             if (isOnlineToday) {
