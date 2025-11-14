@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAZ Albahjah WFH Tracker</title>
+    <!-- Memuat Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat Supabase Client -->
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+        window.createClient = createClient;
+    </script>
+    <style>
+        /* Font Inter */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Animasi untuk modal */
+        .modal-fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        .modal-fade-out {
+            animation: fadeOut 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0; transform: scale(0.95); }
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c5c5c5;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden flex flex-col md:flex-row min-h-[70vh]">
+        
+        <!-- Kolom Kiri: Status & Aksi Saya -->
+        <div class="w-full md:w-1/3 bg-gray-50 p-6 border-b md:border-b-0 md:border-r">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Status Saya</h2>
+
+            <!-- Kontrol Nama -->
+            <div class="mb-4">
+                <label for="cabang" class="block text-sm font-medium text-gray-700 mb-1">Cabang</label>
+                <select id="cabang" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">-- Pilih Cabang --</option>
+                    <option value="Pusat">Pusat</option>
+                    <option value="Barat">Barat</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Nama Anda</label>
+                <select id="name" disabled class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-200 disabled:cursor-not-allowed">
+                    <option value="">-- Pilih Cabang Dulu --</option>
+                </select>
+            </div>
+
+            <!-- ID Pengguna -->
+            <div class="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p class="text-xs text-blue-700">User ID Anda:</p>
+                <p id="user-id" class="text-xs font-mono text-blue-900 break-all">Memuat...</p>
+            </div>
+
+            <!-- Tombol Aksi -->
+            <div class="space-y-3">
+                <button id="check-in-btn" class="w-full text-white font-bold py-3 px-4 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 bg-green-500 hover:bg-green-600">
+                    Check-In
+                </button>
+                <button id="check-out-btn" class="w-full text-white font-bold py-3 px-4 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 bg-red-500 hover:bg-red-600" disabled>
+                    Check-Out
+                </button>
+            </div>
+
+            <!-- Status Terkini -->
+            <div class="mt-6">
+                <p class="text-sm text-gray-600">Status Terkini:</p>
+                <p id="current-status" class="text-lg font-bold text-gray-500">Offline</p>
+            </div>
+        </div>
+
+        <!-- Kolom Kanan: Status Tim -->
+        <div class="w-full md:w-2/3 p-6 flex-1">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Status Tim (Hari Ini)</h2>
+            
+            <!-- Kontainer Dua Kolom -->
+            <div id="team-status-container" class="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[60vh] overflow-y-auto pr-2">
+                
+                <!-- Kolom Online -->
+                <div>
+                    <h3 class="text-lg font-semibold text-green-700 mb-3 border-b-2 border-green-200 pb-2">Online</h3>
+                    <div id="online-column" class="space-y-3">
+                        <p class="text-gray-500 text-sm">Memuat...</p>
+                    </div>
+                </div>
+                
+                <!-- Kolom Offline -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-600 mb-3 border-b-2 border-gray-200 pb-2">Offline / Belum Check-in</h3>
+                    <div id="offline-column" class="space-y-3">
+                        <p class="text-gray-500 text-sm">Memuat...</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Aktivitas -->
+    <div id="activity-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
+            <h3 class="text-2xl font-bold text-gray-900 mb-4">Konfirmasi Kehadiran</h3>
+            <p class="text-gray-700 mb-6">Apakah Anda masih bekerja?</p>
+            <p class="text-4xl font-bold text-red-600 mb-6" id="modal-timer">60</p>
+            <button id="confirm-active-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
+                Ya, Saya Masih Bekerja
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Detail User -->
+    <div id="detail-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-gray-900" id="detail-name">...</h3>
+                <span class="px-3 py-1 text-sm font-medium rounded-full" id="detail-status-badge">...</span>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="p-3 bg-gray-50 rounded-lg">
+                    <p class="text-sm font-medium text-gray-500">Waktu Check-In Terakhir</p>
+                    <p class="text-lg font-semibold text-gray-800" id="detail-check-in">...</p>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-lg">
+                    <p class="text-sm font-medium text-gray-500">Waktu Aksi Terakhir (Check-Out)</p>
+                    <p class="text-lg font-semibold text-gray-800" id="detail-last-action">...</p>
+                </div>
+                <div class="p-3 bg-red-50 rounded-lg" id="detail-lalai-info" style="display: none;">
+                    <p class="text-sm font-medium text-red-700">Info Lalai</p>
+                    <p class="text-lg font-semibold text-red-800">Check-out otomatis (lalai) terdeteksi.</p>
+                </div>
+            </div>
+
+            <button onclick="closeDetailModal()" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition duration-300 mt-6">
+                Tutup
+            </button>
+        </div>
+    </div>
+
+
+    <!-- Modal Error -->
+    <div id="error-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
+            <h3 class="text-2xl font-bold text-red-700 mb-4">Koneksi Gagal</h3>
+            <p class="text-gray-700 mb-6" id="error-message">Gagal terhubung ke database. Memeriksa koneksi...</p>
+            <button onclick="document.getElementById('error-modal').classList.add('hidden')" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition duration-300">
+                Tutup
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- Konfigurasi ---
+        const SUPABASE_URL = 'https://eegpqzxcocjipgekvxsa.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlZ3Bxenhjb2NqaXBnZWt2eHNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMDMzMDcsImV4cCI6MjA3ODU3OTMwN30.yX-PdOU2HPB6Q8exfkyIAtkpEO8216S5P0hU00eCE2Y';
+        const TABLE_NAME = 'wfh_users';
+        const ACTIVITY_CHECK_MINUTES = 30; // Timer konfirmasi (30 menit)
+        const MODAL_COUNTDOWN_SECONDS = 60; // Timer modal (60 detik)
+
+        // --- Daftar Nama Tim (Master List) ---
+        const teamData = {
+            "Pusat": [
+                "Nova Nursanti", "Nurwanti", "Dewi Waci", "Dede Priatna",
+                "Muhammad Atqia Tawwaba", "Ulfah Janatun Nisa", "Roi Haki",
+                "Rinaldi Haris", "Faalih Ferdiana"
+            ],
+            "Barat": [
+                "Asti", "Rika", "Anis", "Ita p", "Neng nurjamil", "Silvi",
+                "Dela", "Lita", "Neng siti qomariah", "Halim", "Siti lutfiah",
+                "Naya", "Regina", "Ita maulid", "Neng salsa", "Ami", "Rani",
+                "Eny", "Hilma", "Nurya", "Teh orin", "Reza", "Tio", "Rama",
+                "Nandi", "Naufal", "Ardian"
+            ]
+        };
+        // [PERBAIKAN] Gabungkan semua nama ke satu 'Master List' untuk referensi
+        const allEmployeeNames = [...teamData["Pusat"], ...teamData["Barat"]].sort((a, b) => a.localeCompare(b));
+
+        // --- Variabel Global ---
+        let supabase;
+        let userId; 
+        let currentUser = {
+            user_id: null, 
+            name: '',
+            status: 'Offline',
+            last_action: 'Manual', 
+            updated_at: new Date().toISOString(),
+            last_check_in: null 
+        };
+        let teamStatus = {}; // Ini akan menyimpan SEMUA data mentah dari Supabase
+        let activityCheckTimer;
+        let modalTimer;
+        let modalCountdown;
+
+        // --- Elemen DOM ---
+        const checkInBtn = document.getElementById('check-in-btn');
+        const checkOutBtn = document.getElementById('check-out-btn');
+        const currentStatusEl = document.getElementById('current-status');
+        const userIdEl = document.getElementById('user-id');
+        const onlineColumn = document.getElementById('online-column');
+        const offlineColumn = document.getElementById('offline-column');
+        
+        const activityModal = document.getElementById('activity-modal');
+        const modalTimerEl = document.getElementById('modal-timer');
+        const confirmActiveBtn = document.getElementById('confirm-active-btn');
+        const errorModal = document.getElementById('error-modal');
+        const errorMessageEl = document.getElementById('error-message');
+        const cabangSelect = document.getElementById('cabang');
+        const nameSelect = document.getElementById('name');
+
+        const detailModal = document.getElementById('detail-modal');
+        const detailName = document.getElementById('detail-name');
+        const detailStatusBadge = document.getElementById('detail-status-badge');
+        const detailCheckIn = document.getElementById('detail-check-in');
+        const detailLastAction = document.getElementById('detail-last-action');
+        const detailLalaiInfo = document.getElementById('detail-lalai-info');
+
+
+        // --- Fungsi Utama ---
+
+        /**
+         * Menginisialisasi Supabase dan ID Pengguna
+         */
+        async function initialize() {
+            try {
+                if (!window.createClient) {
+                    throw new Error("Supabase client (createClient) tidak ditemukan.");
+                }
+                supabase = window.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                
+                // Dapatkan atau buat User ID unik
+                userId = localStorage.getItem('wfh_user_id');
+                if (!userId) {
+                    userId = crypto.randomUUID();
+                    localStorage.setItem('wfh_user_id', userId);
+                }
+                currentUser.user_id = userId; 
+                userIdEl.textContent = userId;
+
+                console.log('Supabase terinisialisasi, User ID:', userId);
+
+                // Setup listener UI
+                setupEventListeners();
+
+                // Muat data user dan tim
+                await loadUserData();
+                await fetchInitialTeamStatus();
+
+                // Mulai listener realtime
+                subscribeToTeamChanges();
+
+            } catch (error) {
+                console.error("Kesalahan Inisialisasi:", error);
+                showErrorModal(`Kesalahan inisialisasi: ${error.message}`);
+            }
+        }
+
+        /**
+         * Mengatur semua event listener UI
+         */
+        function setupEventListeners() {
+            checkInBtn.addEventListener('click', () => performCheckIn());
+            checkOutBtn.addEventListener('click', () => performCheckOut('Manual'));
+            confirmActiveBtn.addEventListener('click', () => confirmActivity());
+
+            cabangSelect.addEventListener('change', () => {
+                populateNameSelect(cabangSelect.value);
+            });
+
+            nameSelect.addEventListener('change', () => {
+                const newName = nameSelect.value;
+                if (newName && newName !== currentUser.name) {
+                    currentUser.name = newName;
+                    updateUserData({ name: newName });
+                }
+            });
+        }
+
+        /**
+         * Mengisi dropdown nama berdasarkan cabang
+         */
+        function populateNameSelect(cabang) {
+            nameSelect.innerHTML = '<option value="">-- Pilih Nama Anda --</option>';
+            if (cabang && teamData[cabang]) {
+                teamData[cabang].forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    if (name === currentUser.name) {
+                        option.selected = true;
+                    }
+                    nameSelect.appendChild(option);
+                });
+                nameSelect.disabled = false;
+            } else {
+                nameSelect.disabled = true;
+                nameSelect.innerHTML = '<option value="">-- Pilih Cabang Dulu --</option>';
+            }
+        }
+
+        /**
+         * Memuat data pengguna saat ini dari Supabase
+         */
+        async function loadUserData() {
+            try {
+                const { data, error } = await supabase
+                    .from(TABLE_NAME)
+                    .select('*')
+                    .eq('user_id', userId) 
+                    .single();
+
+                if (error && error.code !== 'PGRST116') { // PGRST116 = baris tidak ditemukan
+                    throw error;
+                }
+
+                if (data) {
+                    console.log("Memuat data user:", data);
+                    currentUser.name = data.name || '';
+                    currentUser.status = data.status || 'Offline';
+                    currentUser.last_action = data.last_action || 'Manual';
+                    currentUser.last_check_in = data.last_check_in; 
+                    
+                    // Update UI berdasarkan data yang dimuat
+                    if (data.name) {
+                        const cabang = Object.keys(teamData).find(c => teamData[c].includes(data.name));
+                        if (cabang) {
+                            cabangSelect.value = cabang;
+                            populateNameSelect(cabang);
+                            nameSelect.value = data.name;
+                        }
+                    }
+
+                    // Cek apakah status 'Online' berasal dari hari ini.
+                    const todayStartWIB = getTodayStartWIB();
+
+                    if (currentUser.status === 'Online' && currentUser.last_check_in && new Date(currentUser.last_check_in) >= todayStartWIB) {
+                        setUIState(true);
+                        startActivityCheck();
+                    } else {
+                        // Jika status 'Online' tapi dari kemarin, paksa 'Offline'
+                        setUIState(false);
+                        if(currentUser.status === 'Online') {
+                            performCheckOut('Otomatis (Reset Harian)');
+                        }
+                    }
+
+                } else {
+                    console.log("User baru, membuat data...");
+                    populateNameSelect(cabangSelect.value);
+                    setUIState(false);
+                }
+            } catch (error) {
+                console.error("Gagal memuat data user:", error);
+                showErrorModal(`Gagal memuat data Anda: ${error.message}`);
+            }
+        }
+
+        /**
+         * Mengambil data awal seluruh tim
+         */
+        async function fetchInitialTeamStatus() {
+            try {
+                const { data, error } = await supabase
+                    .from(TABLE_NAME)
+                    .select('user_id, name, status, updated_at, last_action, last_check_in'); 
+
+                if (error) throw error;
+
+                teamStatus = {}; // Reset
+                data.forEach(user => {
+                    // Hanya tambahkan jika ada user_id, untuk menghindari data null
+                    if(user.user_id) {
+                        teamStatus[user.user_id] = user; 
+                    }
+                });
+                renderTeamStatus();
+            } catch (error) {
+                console.error("Gagal ambil data tim awal:", error);
+                showErrorModal(`Gagal memuat data tim: ${error.message}`);
+            }
+        }
+
+        /**
+         * Berlangganan perubahan data tim secara realtime
+         */
+        function subscribeToTeamChanges() {
+            supabase
+                .channel('public:wfh_users')
+                .on('postgres_changes', { event: '*', schema: 'public', table: TABLE_NAME }, (payload) => {
+                    console.log('Perubahan terdeteksi:', payload);
+                    const newUser = payload.new;
+                    if (newUser && newUser.user_id) {
+                        if (newUser.user_id === currentUser.user_id && !currentUser.name && newUser.name) {
+                             currentUser.name = newUser.name;
+                        }
+                        // Update data di 'gudang'
+                        teamStatus[newUser.user_id] = newUser; 
+                    }
+                    // Render ulang daftar tim dengan data terbaru
+                    renderTeamStatus();
+                })
+                .subscribe((status, err) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('Berhasil terhubung ke Realtime!');
+                    }
+                    if (status === 'CHANNEL_ERROR' || err) {
+                        console.error('Koneksi Realtime Gagal:', err);
+                        showErrorModal(`Koneksi realtime gagal: ${err?.message || 'Error'}. Coba refresh.`);
+                    }
+                });
+        }
+
+        /**
+         * [PERBAIKAN LOGIKA] Merender daftar status tim menggunakan Master List
+         */
+        function renderTeamStatus() {
+            onlineColumn.innerHTML = ''; // Kosongkan kolom online
+            offlineColumn.innerHTML = ''; // Kosongkan kolom offline
+            
+            const todayStartWIB = getTodayStartWIB();
+
+            // --- TAHAP 1: De-duplikasi data DARI DATABASE (untuk mendapatkan status terbaru) ---
+            const uniqueUsersByName = new Map();
+            for (const user of Object.values(teamStatus)) {
+                if (user.name && user.user_id !== currentUser.user_id) { // Jangan tampilkan diri sendiri
+                    const existingUser = uniqueUsersByName.get(user.name);
+                    if (!existingUser || new Date(user.updated_at) > new Date(existingUser.updated_at)) {
+                        uniqueUsersByName.set(user.name, user);
+                    }
+                }
+            }
+
+            // --- TAHAP 2: Tentukan siapa yang Online (berdasarkan data DB) ---
+            const onlineUsers = [];
+            for (const user of uniqueUsersByName.values()) {
+                if (user.status === 'Online' && 
+                    user.last_check_in && 
+                    new Date(user.last_check_in) >= todayStartWIB) {
+                    onlineUsers.push(user);
+                }
+            }
+            onlineUsers.sort((a, b) => a.name.localeCompare(b.name));
+            const onlineUserNames = new Set(onlineUsers.map(u => u.name));
+
+            // --- TAHAP 3: [LOGIKA BARU] Buat daftar Offline dari Master List (allEmployeeNames) ---
+            const offlineUsers = [];
+            for (const name of allEmployeeNames) {
+                if (name === currentUser.name) continue; // Jangan tampilkan diri sendiri
+
+                // Jika nama INI TIDAK ADA di daftar online, maka dia Offline.
+                if (!onlineUserNames.has(name)) {
+                    // Cek apakah kita punya data (lama) untuk user ini di DB
+                    const userData = uniqueUsersByName.get(name);
+                    
+                    if (userData) {
+                        // Hebat, kita punya data. Tampilkan status offline dia yg terakhir.
+                        offlineUsers.push(userData);
+                    } else {
+                        // Ini user baru yg belum pernah login. Buat data 'dummy' untuk ditampilkan.
+                        offlineUsers.push({
+                            user_id: `placeholder-${name}`, // ID unik palsu untuk 'onclick'
+                            name: name,
+                            status: 'Offline',
+                            updated_at: null, // Tandai sebagai 'Belum ada data'
+                            last_check_in: null,
+                            last_action: null
+                        });
+                    }
+                }
+            }
+            // (offlineUsers sudah di-sort berdasarkan allEmployeeNames)
+
+            // --- TAHAP 4: Render ---
+
+            // Render Kolom Online
+            if (onlineUsers.length === 0) {
+                onlineColumn.innerHTML = '<p class="text-gray-500 text-sm">Tidak ada tim yang online saat ini.</p>';
+            } else {
+                onlineUsers.forEach(user => {
+                    onlineColumn.innerHTML += createUserCard(user, true); // true = isOnline
+                });
+            }
+
+            // Render Kolom Offline
+            if (offlineUsers.length === 0) {
+                offlineColumn.innerHTML = '<p class="text-gray-500 text-sm">Semua tim sudah check-in.</p>';
+            } else {
+                offlineUsers.forEach(user => {
+                    offlineColumn.innerHTML += createUserCard(user, false); // false = isOffline
+                });
+            }
+        }
+
+
+        /**
+         * Membuat HTML Card (menerima status 'isOnline' yang sudah difilter)
+         */
+        function createUserCard(user, isOnline) {
+            const statusColor = isOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
+            const statusText = isOnline ? 'Online' : 'Offline';
+            
+            let lastUpdateText = 'Belum pernah check-in'; // [PERBAIKAN] Default untuk user baru
+            if (isOnline && user.last_check_in) {
+                lastUpdateText = 'Check-in: ' + new Date(user.last_check_in).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            } else if (user.updated_at) { // Hanya tampilkan jika BUKAN null (user baru)
+                lastUpdateText = 'Update: ' + new Date(user.updated_at).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            }
+            
+            let actionText = '';
+            const todayStartWIB = getTodayStartWIB();
+
+            if (!isOnline && user.last_action === 'Otomatis (Lalai)' && user.updated_at && new Date(user.updated_at) >= todayStartWIB) {
+                actionText = '<span class="text-xs text-red-500 ml-2">(Lalai Hari Ini)</span>';
+            }
+
+            return `
+                <div onclick="showUserDetails('${user.user_id}')" 
+                     class="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg shadow-sm cursor-pointer transition duration-200 hover:bg-gray-50 hover:shadow-md">
+                    <div>
+                        <p class="font-semibold text-gray-900">${user.name} ${actionText}</p>
+                        <p class="text-sm text-gray-500">${lastUpdateText}</p>
+                    </div>
+                    <span class="px-3 py-1 text-xs font-medium rounded-full ${statusColor}">
+                        ${statusText}
+                    </span>
+                </div>
+            `;
+        }
+
+        /**
+         * Menampilkan modal detail untuk user yang diklik
+         */
+        function showUserDetails(clickedUserId) {
+            let user;
+            // [PERBAIKAN] Cek apakah ini user 'placeholder' atau user 'database'
+            if (clickedUserId.startsWith('placeholder-')) {
+                // Ini user placeholder. Buat data dummy.
+                const name = clickedUserId.replace('placeholder-', '');
+                user = {
+                    name: name,
+                    status: 'Offline',
+                    updated_at: null,
+                    last_check_in: null,
+                    last_action: null
+                };
+            } else {
+                // Ini user database. Ambil dari 'gudang' teamStatus.
+                user = teamStatus[clickedUserId]; 
+            }
+            
+            if (!user) {
+                console.warn(`Data user untuk ID ${clickedUserId} tidak ditemukan.`);
+                return;
+            }
+
+            detailName.textContent = user.name;
+
+            const todayStartWIB = getTodayStartWIB();
+            const isOnlineToday = user.status === 'Online' && user.last_check_in && new Date(user.last_check_in) >= todayStartWIB;
+
+            // Setup Badge Status
+            if (isOnlineToday) {
+                detailStatusBadge.textContent = 'Online';
+                detailStatusBadge.className = 'px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800';
+                detailLastAction.parentElement.querySelector('p.text-sm').textContent = 'Waktu Aksi Terakhir';
+            } else {
+                detailStatusBadge.textContent = 'Offline';
+                detailStatusBadge.className = 'px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800';
+                detailLastAction.parentElement.querySelector('p.text-sm').textContent = 'Waktu Check-Out';
+            }
+            
+            // Tampilkan Waktu
+            detailCheckIn.textContent = formatTime(user.last_check_in);
+            detailLastAction.textContent = formatTime(user.updated_at);
+
+            // Tampilkan Info Lalai
+            if (!isOnlineToday && user.last_action === 'Otomatis (Lalai)' && user.updated_at && new Date(user.updated_at) >= todayStartWIB) {
+                detailLalaiInfo.style.display = 'block';
+            } else {
+                detailLalaiInfo.style.display = 'none';
+            }
+
+            detailModal.classList.remove('hidden');
+        }
+        window.showUserDetails = showUserDetails;
+
+        /**
+         * Fungsi untuk menutup modal detail
+         */
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.add('hidden');
+        }
+        window.closeDetailModal = closeDetailModal;
+
+
+        /**
+         * Logika saat menekan tombol Check-In
+         */
+        async function performCheckIn() {
+            if (!currentUser.name) {
+                const selectedName = nameSelect.value;
+                if (!selectedName) {
+                    alert("Harap pilih Cabang dan Nama Anda terlebih dahulu.");
+                    return;
+                }
+                currentUser.name = selectedName;
+            }
+
+            console.log("Melakukan Check-In...");
+            setUIState(true);
+            startActivityCheck();
+
+            const checkInTime = new Date().toISOString();
+            currentUser.last_check_in = checkInTime; 
+
+            await updateUserData({
+                status: 'Online',
+                last_action: 'Manual',
+                updated_at: checkInTime,
+                last_check_in: checkInTime, 
+                name: currentUser.name 
+            });
+        }
+
+        /**
+         * Logika saat menekan tombol Check-Out
+         */
+        async function performCheckOut(reason = 'Manual') {
+            console.log(`Melakukan Check-Out (Alasan: ${reason})...`);
+            setUIState(false);
+            stopActivityCheck();
+            hideActivityCheck();
+
+            await updateUserData({
+                status: 'Offline',
+                last_action: reason,
+                updated_at: new Date().toISOString()
+            });
+        }
+
+        /**
+         * Memperbarui (Upsert) data user ke Supabase
+         */
+        async function updateUserData(dataToUpdate) {
+            const dataToSend = {
+                user_id: currentUser.user_id, 
+                name: currentUser.name,
+                status: currentUser.status,
+                last_action: currentUser.last_action,
+                last_check_in: currentUser.last_check_in, 
+                ...dataToUpdate,
+                updated_at: new Date().toISOString() 
+            };
+            
+            currentUser.status = dataToSend.status;
+            currentUser.last_action = dataToSend.last_action;
+            currentUser.name = dataToSend.name; 
+            
+            try {
+                const { error } = await supabase
+                    .from(TABLE_NAME)
+                    .upsert(dataToSend);
+                
+                if (error) throw error;
+                console.log("Data user berhasil diupdate:", dataToSend);
+
+            } catch (error) {
+                console.error("Gagal update data user:", error);
+                showErrorModal(`Gagal menyimpan data: ${error.message}.`);
+            }
+        }
+
+        /**
+         * Mengatur tampilan UI (tombol, teks status)
+         */
+        function setUIState(isOnline) {
+            if (isOnline) {
+                checkInBtn.disabled = true;
+                checkOutBtn.disabled = false;
+                currentStatusEl.textContent = 'Online';
+                currentStatusEl.className = 'text-lg font-bold text-green-600';
+            } else {
+                checkInBtn.disabled = false;
+                checkOutBtn.disabled = true;
+                currentStatusEl.textContent = 'Offline';
+                currentStatusEl.className = 'text-lg font-bold text-gray-500';
+            }
+        }
+
+        // --- Logika Timer Konfirmasi ---
+
+        function startActivityCheck() {
+            stopActivityCheck(); 
+            console.log(`Timer konfirmasi dimulai (${ACTIVITY_CHECK_MINUTES} menit).`);
+            activityCheckTimer = setInterval(showActivityCheck, ACTIVITY_CHECK_MINUTES * 60 * 1000);
+        }
+
+        function stopActivityCheck() {
+            clearInterval(activityCheckTimer);
+        }
+
+        function showActivityCheck() {
+            console.log("Menampilkan modal konfirmasi...");
+            modalCountdown = MODAL_COUNTDOWN_SECONDS;
+            modalTimerEl.textContent = modalCountdown;
+            activityModal.classList.remove('hidden');
+
+            modalTimer = setInterval(() => {
+                modalCountdown--;
+                modalTimerEl.textContent = modalCountdown;
+
+                if (modalCountdown <= 0) {
+                    console.log("Waktu modal habis. Auto Checkout.");
+                    clearInterval(modalTimer);
+                    performCheckOut('Otomatis (Lalai)');
+                }
+            }, 1000);
+        }
+
+        function hideActivityCheck() {
+            activityModal.classList.add('hidden');
+            clearInterval(modalTimer);
+        }
+
+        function confirmActivity() {
+            console.log("Aktivitas dikonfirmasi.");
+            hideActivityCheck();
+            startActivityCheck();
+        }
+
+        // --- Fungsi Bantuan ---
+
+        /**
+         * Helper untuk mendapatkan jam 00:00 WIB hari ini
+         */
+        function getTodayStartWIB() {
+            const todayStartWIB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+            todayStartWIB.setHours(0, 0, 0, 0); // Set ke 00:00:00 WIB
+            return todayStartWIB;
+        }
+
+        function showErrorModal(message) {
+            errorMessageEl.textContent = message;
+            errorModal.classList.remove('hidden');
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) {
+                return 'Belum ada data';
+            }
+            try {
+                const options = {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    timeZone: 'Asia/Jakarta', // Tampilkan dalam WIB
+                    hour12: false
+                };
+                return new Date(isoString).toLocaleString('id-ID', options) + ' WIB';
+            } catch (e) {
+                console.error("Gagal format waktu:", isoString, e);
+                return 'Data waktu tidak valid';
+            }
+        }
+
+        // --- Mulai Aplikasi ---
+        initialize();
+
+    </script>
+</body>
+</html>
